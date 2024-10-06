@@ -1,0 +1,76 @@
+name: '🌐 Get url and deploy API'
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+  schedule:
+    - cron: '0 0 * * *'
+jobs:
+  Get-url-and-deploy:
+    name: Get url and deploy
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+    
+    - name: Set up Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: 3.9
+    
+    - name: Install dependencies
+      run: |
+        pip install requests beautifulsoup4
+        sudo apt install -y jq
+        jq --version
+    
+    - name: Run Python script
+      run: |
+        OUTPUT=$(python -c 'import requests; from bs4 import BeautifulSoup; print("https://www."+BeautifulSoup(requests.get("https://t.me/ZT_officiel").text, "html.parser").find("div", class_="tgme_page_title").text.lower().replace(" ", "").replace("\n", ""))')
+        echo "Output : $OUTPUT" 
+        echo $OUTPUT > url.txt
+    
+    - name: read file
+      run: |
+        cat url.txt    
+        
+    - name: Download favicon
+      run: |
+        URL=$(cat url.txt)
+        wget "${URL}/templates/zone/images/favicon.ico" -O favicon.ico
+    
+    - name: Create JSON file
+      run: |
+        URL=$(cat url.txt)
+        TIMESTAMP=$(date +'%d-%m-%Y %H:%M:%S')
+        echo "{\"url\": \"$URL\", \"timestamp\": \"$TIMESTAMP\"}" > url.json
+    
+    - name: Create second page
+      run: |
+        mkdir -p ./goto
+        cd ./goto
+        echo '<!DOCTYPE html><html><head><title>Redirection</title></head><body><script>window.location.href = "'$(cat ../url.txt)'";</script></body></html>' > index.html
+    
+    - name: Create HTML file
+      run: |
+        echo '<!DOCTYPE html><html><head><title>Accès aux Données JSON</title></head><body><p>Pour accéder aux données JSON, <a href="url.json" target="_blank">cliquez ici</a>.</p></body></html>' > index.html
+    
+    - name: Check if URL has changed
+      id: check_url
+      run: |
+        URL=$(cat url.txt)
+        echo "::set-output name=changed::true"
+
+
+    - name: See if url changed
+      run: |
+        echo "URL changed: ${{ steps.check_url.outputs.changed }}"
+
+    - name: Deploy to GitHub Pages
+      if: steps.check_url.outputs.changed == 'true'
+      uses: JamesIves/github-pages-deploy-action@4.1.5
+      with:
+        branch: gh-pages
+        folder: .
+      
